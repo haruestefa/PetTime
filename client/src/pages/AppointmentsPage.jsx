@@ -139,9 +139,15 @@ const WizardStep2 = ({ form, setForm, onNext, onBack }) => {
                 : null
             }))
             .sort((a, b) => {
-              if (a.distance === null && b.distance === null) return 0;
+              if (a.distance === null && b.distance === null) {
+                return (b.avg_rating ?? 0) - (a.avg_rating ?? 0);
+              }
               if (a.distance === null) return 1;
               if (b.distance === null) return -1;
+              const DIST_THRESHOLD = 0.05; // km (~50 m)
+              if (Math.abs(a.distance - b.distance) <= DIST_THRESHOLD) {
+                return (b.avg_rating ?? 0) - (a.avg_rating ?? 0);
+              }
               return a.distance - b.distance;
             });
           setClinics(sorted);
@@ -153,7 +159,7 @@ const WizardStep2 = ({ form, setForm, onNext, onBack }) => {
         setGeoState('denied');
         try {
           const data = await clinicService.getAll();
-          setClinics(data.sort((a, b) => a.name.localeCompare(b.name)));
+          setClinics(data.sort((a, b) => (b.avg_rating ?? 0) - (a.avg_rating ?? 0)));
         } catch {
           toast.error('Error al cargar clínicas');
         }
@@ -205,15 +211,24 @@ const WizardStep2 = ({ form, setForm, onNext, onBack }) => {
                   <p className="font-semibold text-gray-800 text-sm">{clinic.name}</p>
                   <p className="text-gray-500 text-xs">📍 {clinic.city}</p>
                 </div>
-                {clinic.distance !== null ? (
-                  <span className="text-blue-600 text-xs font-medium bg-blue-100 px-2 py-1 rounded-full">
-                    {clinic.distance < 1
-                      ? `${Math.round(clinic.distance * 1000)} m`
-                      : `${clinic.distance.toFixed(1)} km`}
-                  </span>
-                ) : (
-                  <span className="text-gray-400 text-xs">Sin coordenadas</span>
-                )}
+                <div className="flex flex-col items-end gap-1">
+                  {clinic.distance !== null ? (
+                    <span className="text-blue-600 text-xs font-medium bg-blue-100 px-2 py-1 rounded-full">
+                      {clinic.distance < 1
+                        ? `${Math.round(clinic.distance * 1000)} m`
+                        : `${clinic.distance.toFixed(1)} km`}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-xs">Sin coordenadas</span>
+                  )}
+                  {clinic.avg_rating !== null ? (
+                    <span className="text-yellow-600 text-xs font-medium">
+                      ⭐ {clinic.avg_rating.toFixed(1)}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 text-xs">Sin calificación</span>
+                  )}
+                </div>
               </div>
             </button>
           ))}

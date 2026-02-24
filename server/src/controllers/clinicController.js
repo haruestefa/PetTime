@@ -84,14 +84,14 @@ const createClinic = async (req, res) => {
   }
 
   try {
-    let latitude = manualLat !== undefined && manualLat !== '' ? parseFloat(manualLat) : null;
-    let longitude = manualLon !== undefined && manualLon !== '' ? parseFloat(manualLon) : null;
+    let latitude = manualLat !== undefined && manualLat !== '' ? String(manualLat) : null;
+    let longitude = manualLon !== undefined && manualLon !== '' ? String(manualLon) : null;
 
     // Solo geocodificar si no se ingresaron coordenadas manualmente
     if (latitude === null || longitude === null) {
       const coords = await geocodeClinic(address, city);
-      latitude = coords.latitude;
-      longitude = coords.longitude;
+      latitude = coords.latitude !== null ? String(coords.latitude) : null;
+      longitude = coords.longitude !== null ? String(coords.longitude) : null;
     }
 
     const { data, error } = await supabase
@@ -108,12 +108,16 @@ const createClinic = async (req, res) => {
 };
 
 const updateClinic = async (req, res) => {
-  const { name, address, city } = req.body;
+  const { name, address, city, latitude: rawLat, longitude: rawLon } = req.body;
+
+  const updateData = { name, address, city };
+  if (rawLat !== undefined && rawLat !== '') updateData.latitude = String(rawLat);
+  if (rawLon !== undefined && rawLon !== '') updateData.longitude = String(rawLon);
 
   try {
     const { data, error } = await supabase
       .from('clinics')
-      .update({ name, address, city })
+      .update(updateData)
       .eq('id', req.params.id)
       .select()
       .single();

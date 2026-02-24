@@ -37,6 +37,19 @@ const ClinicsPage = () => {
   const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
   const [savingReview, setSavingReview] = useState(false);
   const [form, setForm] = useState({ name: '', address: '', city: '', latitude: '', longitude: '' });
+  const [editingClinic, setEditingClinic] = useState(null); // clínica siendo editada
+  const [editForm, setEditForm] = useState({ name: '', address: '', city: '', latitude: '', longitude: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [coordsInput, setCoordsInput] = useState('');
+  const [editCoordsInput, setEditCoordsInput] = useState('');
+
+  const parseCoords = (str) => {
+    const parts = str.split(',').map(s => s.trim());
+    return {
+      latitude: parts[0] ?? '',
+      longitude: parts[1] ?? '',
+    };
+  };
 
   useEffect(() => {
     fetchClinics();
@@ -70,6 +83,7 @@ const ClinicsPage = () => {
       toast.success('Clínica agregada');
       setForm({ name: '', address: '', city: '', latitude: '', longitude: '' });
       setShowForm(false);
+      setCoordsInput('');
       fetchClinics();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Error al agregar clínica');
@@ -87,6 +101,35 @@ const ClinicsPage = () => {
       if (selectedClinic?.id === id) setSelectedClinic(null);
     } catch {
       toast.error('Error al eliminar');
+    }
+  };
+
+  const openEditModal = (clinic) => {
+    setEditingClinic(clinic);
+    setEditForm({
+      name: clinic.name ?? '',
+      address: clinic.address ?? '',
+      city: clinic.city ?? '',
+      latitude: clinic.latitude ?? '',
+      longitude: clinic.longitude ?? '',
+    });
+    setEditCoordsInput(clinic.latitude && clinic.longitude
+      ? `${clinic.latitude}, ${clinic.longitude}`
+      : '');
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setSavingEdit(true);
+    try {
+      await clinicService.update(editingClinic.id, editForm);
+      toast.success('Clínica actualizada');
+      setEditingClinic(null);
+      fetchClinics();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error al actualizar clínica');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -193,37 +236,23 @@ const ClinicsPage = () => {
                 />
               </div>
               <div className="md:col-span-2">
-                <p className="text-xs text-gray-400 mb-2">
-                  📍 Las coordenadas se detectan automáticamente. Ingrésalas solo si la detección falla.
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Coordenadas <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={coordsInput}
+                  onChange={e => {
+                    setCoordsInput(e.target.value);
+                    const { latitude, longitude } = parseCoords(e.target.value);
+                    setForm({ ...form, latitude, longitude });
+                  }}
+                  placeholder="4.809346140275364, -75.68769938659283"
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  📍 Pega las coordenadas de Google Maps. Se detectan automáticamente si se dejan vacías.
                 </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Latitud <span className="text-gray-400 font-normal">(opcional)</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={form.latitude}
-                      onChange={e => setForm({ ...form, latitude: e.target.value })}
-                      placeholder="4.8133"
-                      className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Longitud <span className="text-gray-400 font-normal">(opcional)</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={form.longitude}
-                      onChange={e => setForm({ ...form, longitude: e.target.value })}
-                      placeholder="-75.6961"
-                      className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    />
-                  </div>
-                </div>
               </div>
             </div>
             <div className="flex gap-3">
@@ -234,7 +263,7 @@ const ClinicsPage = () => {
               >
                 {saving ? 'Guardando...' : 'Guardar clínica'}
               </button>
-              <button type="button" onClick={() => setShowForm(false)} className="text-gray-500 hover:underline text-sm">
+              <button type="button" onClick={() => { setShowForm(false); setCoordsInput(''); }} className="text-gray-500 hover:underline text-sm">
                 Cancelar
               </button>
             </div>
@@ -262,12 +291,20 @@ const ClinicsPage = () => {
                     {clinic.address && <p className="text-gray-400 text-xs">{clinic.address}</p>}
                   </div>
                   {isAdmin && (
-                    <button
-                      onClick={() => handleDelete(clinic.id)}
-                      className="text-red-400 hover:text-red-600 text-sm"
-                    >
-                      Eliminar
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => openEditModal(clinic)}
+                        className="text-blue-500 hover:text-blue-700 text-sm"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(clinic.id)}
+                        className="text-red-400 hover:text-red-600 text-sm"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="mt-2 mb-3">
@@ -287,6 +324,87 @@ const ClinicsPage = () => {
           </div>
         )}
       </main>
+
+      {/* Modal de edición de clínica — solo admins */}
+      {editingClinic && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-bold text-gray-800 text-lg">Editar clínica</h3>
+                <button
+                  type="button"
+                  onClick={() => setEditingClinic(null)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                  <input
+                    required
+                    value={editForm.name}
+                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad *</label>
+                  <input
+                    required
+                    value={editForm.city}
+                    onChange={e => setEditForm({ ...editForm, city: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                  <input
+                    value={editForm.address}
+                    onChange={e => setEditForm({ ...editForm, address: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Coordenadas</label>
+                  <input
+                    type="text"
+                    value={editCoordsInput}
+                    onChange={e => {
+                      setEditCoordsInput(e.target.value);
+                      const { latitude, longitude } = parseCoords(e.target.value);
+                      setEditForm({ ...editForm, latitude, longitude });
+                    }}
+                    placeholder="4.809346140275364, -75.68769938659283"
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    📍 Déjalo vacío para mantener las coordenadas actuales.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+                >
+                  {savingEdit ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingClinic(null)}
+                  className="text-gray-500 hover:underline text-sm"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal de reseñas */}
       {selectedClinic && (
